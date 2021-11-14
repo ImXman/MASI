@@ -7,7 +7,7 @@ A fast model-free inetgration and transfer learning via MASI for single-cell exp
 ### Brief description
 MASI utilizes robust marker idenfication to identify marker genes from reference data and transfers cell-type labels to target data through MACA.
 
-![alt text](https://github.com/ImXman/MASI/blob/master/MASI/Figure%201.jpg?raw=true)
+![alt text](https://github.com/ImXman/MASI/blob/main/MASI/Figure%201.jpg?raw=true)
 
 ### References
     1. Xu, Y., et al. "MACA: Marker-based automatic cell-type annotation for single cell expression data." (2021).

@@ -6,21 +6,22 @@ Created on Tue Jul 21 16:31:17 2020
 """
 
 import scipy
-#import random
 import anndata
 import collections
-import cosg as cosg
 import numpy as np
 import pandas as pd
+import cosg as cosg
 import scanpy as sc
 import multiprocessing
+
+import torch
+import torch.nn.functional as F
 
 import rpy2.robjects as ro
 import rpy2.robjects as robjects
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.conversion import localconverter
 
-#from sklearn import mixture
 from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -39,8 +40,36 @@ def ensemble_labels(multi_labels=None):
             vs.append(v)
         ensemble.append(ks[vs.index(max(vs))])
     return ensemble
+
+def BatchNorm(ad):
+    ##use torch batchnorm1d layer to perform batch normalization
+    ##not used in final method
+    X = ad.X.copy()
+    if scipy.sparse.issparse(X):
+        X = X.todense()
     
-def gene2cell(ad=None, cell_markers=None,use_weight=False,weight_matrix=None,
+    X_all_tensor = torch.tensor(X).float()
+    #batchnorm = torch.nn.BatchNorm1d(X.shape[1], affine=False)
+    batchnorm = torch.nn.LayerNorm(X.shape[1])
+    activation = torch.nn.LeakyReLU(0.2)
+    batchnorm.to(torch.device("cpu"))
+    activation.to(torch.device("cpu"))
+
+    newX = np.zeros((X.shape))
+
+    batches = list(set(ad.obs['study'].values.tolist()))
+    for b in batches:
+        pred = batchnorm(X_all_tensor[ad.obs['study']==b,:])
+        pred = activation(pred)
+        pred = F.normalize(pred,p=1,dim=1)
+        pred = torch.Tensor.cpu(pred).detach().numpy()
+        #scaler = StandardScaler()
+        #pred=scaler.fit_transform(X[ad.obs['study']==b,:])
+        newX[ad.obs['study']==b,:]=pred
+    ad.obsm['X_batch']=newX
+    return ad
+
+def gene2cell(ad=None, cell_markers=None,use_weight=False,
               if_tfidf=True,if_thresh=True,use_knn=False):
     ##TF-IDF transformation
     X = ad.X.copy()
@@ -75,10 +104,7 @@ def gene2cell(ad=None, cell_markers=None,use_weight=False,weight_matrix=None,
                     else:
                         l = np.array(X[:,ad.var.index == i])
                     ##consider marker weight
-                    if weight_matrix is not None:
-                        l = l*(1-weight_matrix[k][cell_markers[k].index(i)])
-                    else:
-                        l = l*(1-marker_index/(len(v)*2))##default 2
+                    l = l*(1-marker_index/(len(v)*2))##default 2
                     
                     n[np.array(l>0).reshape(X.shape[0])] += 1
                     sums += 1
@@ -105,7 +131,7 @@ def gene2cell(ad=None, cell_markers=None,use_weight=False,weight_matrix=None,
             celltype_size[k]=sums
             exprsed[k] = n.reshape(X.shape[0])        
     
-    if use_knn:
+    if use_knn:##not used in final method
         ad.obsm['X_score']=labels.values
         subsample = ad[ad.obs['source']=='reference']
         subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=1000, 
@@ -143,7 +169,6 @@ def gene2cell(ad=None, cell_markers=None,use_weight=False,weight_matrix=None,
         #new_labels = labels#*exprsed
     
     print(labels.shape)
-    
     return labels, new_labels
 
 def multiMASI(labels=None,new_labels=None):
@@ -153,24 +178,22 @@ def multiMASI(labels=None,new_labels=None):
     labels1 = np.argmax(new_labels.values,axis=1)
     ad.obs['Label1'] = labels1
     
-    ##create Label2
-    #if n_pcs is not None:
-    #    pca = PCA(n_components=n_pcs)
-    #    scores = pca.fit_transform(labels.values)
-    #    ad.obsm['Score']=scores
-    #else:
-    #    ad.obsm['Score']=labels.values
-    
     ad.obsm['Score']=labels.values
+    
+    ##two key parameters for louvain clustering
+    #res = [3,5,7]
+    #n_neis = [5,10,15]
     res = [3,5,7]
     n_neis = [5,10,15]
+    
     label_list = np.zeros((ad.X.shape[0],len(res)*len(n_neis))).astype('str')
     indexs = 0
     for r in res:
         for nei in n_neis:
             
             sc.pp.neighbors(ad, use_rep="Score", n_neighbors=nei,metric='cosine')
-            sc.tl.louvain(ad, resolution=r, key_added = 'louvain')
+            #sc.tl.louvain(ad, resolution=r, key_added = 'louvain')
+            sc.tl.leiden(ad, resolution=r, key_added = 'louvain')
             
             cm = confusion_matrix(ad.obs['louvain'].values.astype(int),
                                   labels1)
@@ -225,12 +248,11 @@ def multiMASI(labels=None,new_labels=None):
                     cell_dict[int(k)]="unassigned"
             label_list[:,indexs]=ad.obs['Mapped'].values
             indexs+=1
-        
+            
     return label_list
 
 def parallel(scores=None,labels=None,batch_size=20000,n_core=10):
     index = np.array([i for i in range(scores.shape[0])])
-    #label_list = np.zeros((scores.shape[0],9)).astype('str')
     
     r = np.random.permutation(scores.shape[0])
     r_index = index[r]
@@ -289,29 +311,24 @@ def downsample_to_smallest_category(adata,column="cell_type",random_state=None,
     return adata[sample_selection].copy()
 
 def marker_identification_fast(source_data=None,diff_method="wilcoxon",
-                               repeats=10,num_sub_cells=500):
-    
-    cell_markers_freq ={}
-    cell_markers_rank ={}
+                               repeats=10,num_sub_cells=500,if_metacells=False):
     all_cell_types = list(set(source_data.obs['cell_type']))
-    for celltype in all_cell_types:
-        cell_markers_freq[celltype] = {}
-        cell_markers_rank[celltype] = {}
-    
-    #source_data2 = source_data.copy()
-    #sc.pp.highly_variable_genes(source_data2, n_top_genes=5000,flavor='cell_ranger',subset=True)
-    
     cell_markers = []
     for i in range(repeats):#default 50
-        subsample = source_data.copy()
-        subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=num_sub_cells, 
-                                                    keep_small_categories=True)#default 500
+        if if_metacells:
+            subsample = source_data.copy()
+            subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=50, 
+                                                        keep_small_categories=True)
+        else:
+            subsample = source_data.copy()
+            subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=num_sub_cells, 
+                                                        keep_small_categories=True)#default 500
         if diff_method == 'cosg':
             cosg.cosg(subsample,key_added='cosg',mu=1,n_genes_user=50,groupby='cell_type')#,expressed_pct=0.5
-            cellmarkers = pd.DataFrame(subsample.uns['cosg']['names']).iloc[:50,:]#default 50
+            cellmarkers = pd.DataFrame(subsample.uns['cosg']['names']).iloc[:20,:]#default 50
         elif diff_method in ['t-test','t-test_overestim_var','wilcoxon','logreg']:
             sc.tl.rank_genes_groups(subsample, 'cell_type', method=diff_method)#,tie_correct=True)##Seurat wilcoxon
-            cellmarkers = pd.DataFrame(subsample.uns['rank_genes_groups']['names']).iloc[:50,:]#default 50
+            cellmarkers = pd.DataFrame(subsample.uns['rank_genes_groups']['names']).iloc[:20,:]#default 50
         else:
             r = robjects.r
             r['source']('DE_by_Seurat.R')
@@ -336,56 +353,71 @@ def marker_identification_fast(source_data=None,diff_method="wilcoxon",
             allcelltypes = list(set(subsample.obs['cell_type']))
             for f in allcelltypes:
                 celltypes = result[result['cluster']==f]
-                celltypes = celltypes.iloc[:50,:]['gene'].values.tolist()#default 20
+                celltypes = celltypes.iloc[:20,:]['gene'].values.tolist()#default 20
                 cellmarkers[f]=celltypes
-            cellmarkers = pd.DataFrame(cellmarkers)
+            #cellmarkers = pd.DataFrame(cellmarkers)
+            cellmarkers = pd.DataFrame.from_dict(cellmarkers, orient='index').T
+            cellmarkers = cellmarkers.fillna('')
         cell_markers.append(cellmarkers)
         
-    for i in range(repeats):
-        for celltype in cell_markers[i].columns:
-            markers = cell_markers[i][celltype].values.tolist()
-            for m in markers:
-                if m not in cell_markers_freq[celltype].keys():
-                    cell_markers_freq[celltype][m]=1
-                    cell_markers_rank[celltype][m]=markers.index(m)
-                else:
-                    cell_markers_freq[celltype][m]+=1
-                    cell_markers_rank[celltype][m]+=markers.index(m)
+    cell_markers_db = {}
+    for c in all_cell_types:
+        cell_markers_db[c]=[]
+        for i in cell_markers:
+            cell_markers_db[c].append(i[c].values.tolist())
     
-    cell_markers = {}
-    for k,v in cell_markers_freq.items():
-        freq = pd.DataFrame.from_dict(v,orient='index')
-        rank = pd.DataFrame.from_dict(cell_markers_rank[k],orient='index')
-        fr = pd.concat((freq,rank),1)
-        fr.columns =["freq","rank"]
-        fr = fr[fr["freq"]==repeats]
-        fr = fr.sort_values(by=['rank'])
-        cell_markers[k]=fr.index.tolist()
+    ##r script of Robust rank aggregation
+    r = robjects.r
+    r['source']('RobustRankAggreg.R')
+    rra_r = robjects.globalenv['rra']
+    
+    cell_markers_score ={}
+    cell_markers_rank ={}
+    for c in all_cell_types:
+        celltype = pd.DataFrame(cell_markers_db[c]).T
+        with localconverter(ro.default_converter + pandas2ri.converter):
+            celltype_r = ro.conversion.py2rpy(celltype)
         
-    num_markers=[]
-    for k,v in cell_markers.items():
-        num_markers.append(len(v))
-    min_num = min(num_markers)
-    for k,v in cell_markers.items():
-        cell_markers[k]=v[:min_num]
+        result_r = rra_r(celltype_r)
+        with localconverter(ro.default_converter + pandas2ri.converter):
+            result = ro.conversion.rpy2py(result_r)
+            
+        result = result[result['Score'].values<=0.9].iloc[:20,:]
+        cell_markers_rank[c]=result['Name'].values.tolist()
+        cell_markers_score[c]=result['Score'].values.tolist()
     
-    return cell_markers
+    return cell_markers_rank, cell_markers_score
 
-def marker_identification(source_data=None,num_sub_cells=500):
+def marker_identification(source_data=None,num_sub_cells=500,if_metacells=False):
     
     all_cell_types = list(set(source_data.obs['cell_type']))
     cell_markers = []
     
-    repeats = ['cosg','bimod','poisson']##option 1
+    if if_metacells:
+        #repeats = ['cosg','t-test_overestim_var','wilcoxon-tie','bimod','wilcox','roc','MAST']
+        #repeats = ['MAST','bimod','roc','t-test_overestim_var','wilcoxon-tie','cosg']
+        repeats = ['poisson','bimod','roc','cosg','t-test_overestim_var','wilcoxon-tie']
+    else:
+        repeats = ['poisson','cosg','bimod']
+    #repeats = ['poisson','cosg','bimod']##option 1
     #repeats = ['cosg','t-test_overestim_var','bimod','poisson']##option 2 and it works best so far
     #repeats = ['cosg','t-test_overestim_var','bimod','poisson','wilcox','negbinom','MAST']##option 3
-    for i in repeats:#default 50
-        subsample = source_data.copy()
-        subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=num_sub_cells, 
-                                                    keep_small_categories=True)#default 500
+    for i in repeats:
+        if if_metacells:
+            subsample = source_data.copy()
+            subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=50, 
+                                                        keep_small_categories=True)
+        else:
+            subsample = source_data.copy()
+            subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=num_sub_cells, 
+                                                        keep_small_categories=True)#default 500
         if i == 'cosg':
             cosg.cosg(subsample,key_added='cosg',mu=1,n_genes_user=50,groupby='cell_type')#,expressed_pct=0.5
             cellmarkers = pd.DataFrame(subsample.uns['cosg']['names']).iloc[:20,:]#default 50
+        elif i == 'wilcoxon-tie':
+            sc.tl.rank_genes_groups(subsample, 'cell_type', method='wilcoxon',tie_correct=True)##Seurat wilcoxon
+            cellmarkers = pd.DataFrame(subsample.uns['rank_genes_groups']['names']).iloc[:20,:]#default 50
+            print('**finished identifying marker genes by %s**' % i)
         elif i in ['t-test','t-test_overestim_var','logreg','wilcoxon']:
             sc.tl.rank_genes_groups(subsample, 'cell_type', method=i)#,tie_correct=True)##Seurat wilcoxon
             cellmarkers = pd.DataFrame(subsample.uns['rank_genes_groups']['names']).iloc[:20,:]#default 50
@@ -417,7 +449,9 @@ def marker_identification(source_data=None,num_sub_cells=500):
                 celltypes = result[result['cluster']==f]
                 celltypes = celltypes.iloc[:20,:]['gene'].values.tolist()#default 20
                 cellmarkers[f]=celltypes
-            cellmarkers = pd.DataFrame(cellmarkers)
+            #cellmarkers = pd.DataFrame(cellmarkers)
+            cellmarkers = pd.DataFrame.from_dict(cellmarkers, orient='index').T
+            cellmarkers = cellmarkers.fillna(' ')
             print('**finished identifying marker genes by %s**' % i)
         cell_markers.append(cellmarkers)
     
@@ -432,7 +466,7 @@ def marker_identification(source_data=None,num_sub_cells=500):
     r['source']('RobustRankAggreg.R')
     rra_r = robjects.globalenv['rra']
     
-    cell_markers_score ={}
+    #cell_markers_score ={}
     cell_markers_rank ={}
     for c in all_cell_types:
         celltype = pd.DataFrame(cell_markers_db[c]).T
@@ -443,9 +477,160 @@ def marker_identification(source_data=None,num_sub_cells=500):
         with localconverter(ro.default_converter + pandas2ri.converter):
             result = ro.conversion.rpy2py(result_r)
             
+        genes = result['Name'].values.tolist()
+        newgenes = [g for g in genes if g != ' '][:20]
         result = result.iloc[:20,:]#[result['Score'].values<=0.9]
-        cell_markers_rank[c]=result['Name'].values.tolist()
-        cell_markers_score[c]=result['Score'].values.tolist()
+        cell_markers_rank[c]=newgenes
+        #cell_markers_score[c]=result['Score'].values.tolist()
     
-    return cell_markers_rank, cell_markers_score
+    return cell_markers_rank#, cell_markers_score
+
+def marker_identification_LC(source_data=None,num_sub_cells=500,if_metacells=False):
     
+    all_cell_types = list(set(source_data.obs['cell_type']))
+    cell_markers = []
+    
+    if if_metacells:
+        #repeats = ['cosg','t-test_overestim_var','wilcoxon-tie','bimod','wilcox','roc','MAST']
+        #repeats = ['MAST','bimod','roc','t-test_overestim_var','wilcoxon-tie','cosg']
+        repeats = ['MAST','poisson','bimod','wilcox','t-test_overestim_var','wilcoxon-tie']
+    else:
+        repeats = ['poisson','bimod','wilcox','t-test_overestim_var','wilcoxon-tie']#
+    
+    for i in repeats:
+        if if_metacells:
+            subsample = source_data.copy()
+            subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=50, 
+                                                        keep_small_categories=True)
+        else:
+            subsample = source_data.copy()
+            subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=num_sub_cells, 
+                                                        keep_small_categories=True)
+        if i == 'wilcoxon-tie':
+            sc.tl.rank_genes_groups(subsample, 'cell_type', method='wilcoxon',tie_correct=True)##Seurat wilcoxon
+            cellmarker = pd.DataFrame(subsample.uns['rank_genes_groups']['names']).iloc[:50,:]
+            cellpval = pd.DataFrame(subsample.uns['rank_genes_groups']['pvals']).iloc[:50,:]
+            
+            cellmarkers={}
+            allcelltypes = list(set(subsample.obs['cell_type']))
+            for f in allcelltypes:
+                genes = cellmarker[f].values.tolist()
+                pvals = cellpval[f].values.tolist()
+                cellmarkers[f]=pd.DataFrame({'genes':genes,'Pval':pvals})
+            print('**finished identifying marker genes by %s**' % i)
+            
+        elif i in ['t-test','t-test_overestim_var','logreg','wilcoxon']:
+            sc.tl.rank_genes_groups(subsample, 'cell_type', method=i)#,tie_correct=True)##Seurat wilcoxon
+            cellmarker = pd.DataFrame(subsample.uns['rank_genes_groups']['names']).iloc[:50,:]
+            cellpval = pd.DataFrame(subsample.uns['rank_genes_groups']['pvals']).iloc[:50,:]
+            
+            cellmarkers={}
+            allcelltypes = list(set(subsample.obs['cell_type']))
+            for f in allcelltypes:
+                genes = cellmarker[f].values.tolist()
+                pvals = cellpval[f].values.tolist()
+                cellmarkers[f]=pd.DataFrame({'genes':genes,'Pval':pvals})
+            print('**finished identifying marker genes by %s**' % i)
+            
+        else:
+            #Seurat r script
+            r = robjects.r
+            r['source']('DE_by_Seurat.R')
+            de_r = robjects.globalenv['de']
+            
+            X = subsample.X.copy()
+            if scipy.sparse.issparse(X):
+                X = X.todense()
+
+            exprs = pd.DataFrame(X)
+            exprs.columns = subsample.var.index.tolist()
+            exprs['celltype']=subsample.obs['cell_type'].values
+            
+            with localconverter(ro.default_converter + pandas2ri.converter):
+                exprs_r = ro.conversion.py2rpy(exprs)
+                
+            result_r = de_r(exprs_r,test=i)
+            with localconverter(ro.default_converter + pandas2ri.converter):
+                result = ro.conversion.rpy2py(result_r)
+
+            cellmarkers={}
+            allcelltypes = list(set(subsample.obs['cell_type']))
+            for f in allcelltypes:
+                celltypes = result[result['cluster']==f]
+                celltype = celltypes['gene'].values.tolist()[:50]#default 20
+                cellpval = celltypes['p_val'].values.tolist()[:50]#default 20
+                cellmarkers[f]=pd.DataFrame({'genes':celltype,'Pval':cellpval})
+                
+            print('**finished identifying marker genes by %s**' % i)
+        cell_markers.append(cellmarkers)
+    
+    ##r script of lancaster combination
+    r = robjects.r
+    r['source']('LancasterCombination.R')
+    LC = robjects.globalenv['lancaster.combination']
+    
+    #cell_markers_score ={}
+    cell_markers_rank ={}
+    for c in all_cell_types:
+        celltype = cell_markers[0][c]
+        celltype.index = celltype['genes'].values
+        for de in cell_markers[1:]:
+            celltype2 = de[c]
+            celltype2.index = celltype2['genes'].values
+            celltype = celltype.merge(celltype2, on='genes', how='inner')
+        celltype.index = celltype['genes'].values
+        celltype.pop('genes')
+            
+        with localconverter(ro.default_converter + pandas2ri.converter):
+            celltype_r = ro.conversion.py2rpy(celltype)
+        
+        result_r = LC(celltype_r)
+        with localconverter(ro.default_converter + pandas2ri.converter):
+            result = ro.conversion.rpy2py(result_r)
+            
+        genes = result.index.tolist()[:20]
+        cell_markers_rank[c]=genes
+        #cell_markers_score[c]=result['Score'].values.tolist()
+    
+    return cell_markers_rank#, cell_markers_score
+
+##-----------------------------------------------------------------------------
+##metacells via louvain community detection
+def metacells(source_data=None,res=10):
+    
+    sc.tl.pca(source_data, svd_solver='arpack')
+    sc.pp.neighbors(source_data, n_neighbors=5,metric='cosine')
+    sc.tl.louvain(source_data, resolution=res, key_added = 'louvain')
+    
+    
+    obs_codes, obs_names = pd.factorize(source_data.obs['cell_type'])
+    pred_codes, pred_names = pd.factorize(source_data.obs['louvain'])
+    cm = confusion_matrix(obs_codes, pred_codes)
+    norm_cm = (cm.T / cm.sum(axis=1)).T
+    norm_cm = pd.DataFrame(norm_cm)
+    norm_cm = norm_cm.iloc[:len(obs_names),:len(pred_names)]
+    norm_cm.index = obs_names
+    norm_cm.columns = pred_names
+    norm_cm = norm_cm[sorted(norm_cm.columns)]
+    norm_cm = norm_cm.sort_index(axis=0)
+    
+    louvain2celltype = np.argmax(norm_cm.values, axis=0)
+    meta = {}
+    for i in range(norm_cm.shape[1]):
+        meta[norm_cm.columns[i]]=norm_cm.index.tolist()[louvain2celltype[i]]
+    meta = pd.DataFrame.from_dict(meta,orient='index')
+    meta.columns = ['cell_type']
+    
+    unique_keys, row = np.unique(source_data.obs['louvain'], return_inverse=True)
+    x ={}
+    if scipy.sparse.issparse(source_data.X):
+        for k in unique_keys:
+            x[k]=source_data[source_data.obs['louvain']==k].X.mean(axis=0).reshape(source_data.X.shape[1])[0].tolist()[0]
+    else:
+        for k in unique_keys:
+            x[k]=np.mean(source_data[source_data.obs['louvain']==k].X,axis=0)
+    x = pd.DataFrame.from_dict(x,orient='index')
+    x.columns = source_data.var.index
+    metacells = anndata.AnnData(X=x,obs=meta)
+    
+    return metacells

@@ -12,6 +12,6 @@ de <- function(df,test='MAST'){
   pbmc@active.ident <- celltype
   pbmc$seurat_clusters <- celltype
   
-  diff_genes<-FindAllMarkers(pbmc,test.use=test,only.pos = TRUE,verbose = FALSE)
+  diff_genes<-FindAllMarkers(pbmc,test.use=test,only.pos = TRUE,verbose = FALSE,min.cells.group = 2)
   return(data.frame(diff_genes))
 }

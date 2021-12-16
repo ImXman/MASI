@@ -16,4 +16,4 @@
 | **Human kidney cell atlas** | human_kidney_stewart_markers.csv | 27 cell types in human adult kidney | Stewart et al, Science 2019
 | **Mouse brain** | mouse_brain_rosenberg_markers.csv | 10 cell types in mouse brain  | Rosenberg et al, Science 2018
 
-   **Note** : marker collections in the 2nd table is and should be only used for MACA but not other marker-based annotation methods.
+   **Note** : marker collections in the 2nd table is and should be only used for MASI but not other marker-based annotation methods.

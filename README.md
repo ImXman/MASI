@@ -2,7 +2,7 @@
 
 MASI: marker assisted single-cell expression data integration
 
-A fast model-free inetgration and transfer learning via MASI for single-cell expression data
+Manuscript: Fast model-free inetgration and transfer learning via MASI for single-cell expression data
 
 ### Brief description
 MASI utilizes robust marker idenfication to identify marker genes from reference data and transfers cell-type labels to target data through MACA.

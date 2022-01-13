@@ -18,7 +18,7 @@ MASI utilizes robust marker idenfication to identify marker genes from reference
 ### Usage
 
 ### Reproduce results in manuscript
-Please see tutorials at https://github.com/ImXman/MASI/tutorial
+Please see tutorials at https://github.com/ImXman/MASI/tree/main/tutorial
     
 
 ### References

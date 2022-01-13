@@ -9,6 +9,18 @@ MASI utilizes robust marker idenfication to identify marker genes from reference
 
 ![alt text](https://github.com/ImXman/MASI/blob/main/MASI/Figure%201.jpg?raw=true)
 
+### Install requirement packages
+    pip install scanpy cosg rpy2 sccaf
+    
+    ##install Seurat separately in R
+    install.packages('Seurat')
+    
+### Usage
+
+### Reproduce results in manuscript
+Please see tutorials at https://github.com/ImXman/MASI/tutorial
+    
+
 ### References
     1. Xu, Y., et al. "MACA: Marker-based automatic cell-type annotation for single cell expression data." (2021).
     2. Kolde, Raivo, et al. "Robust rank aggregation for gene list integration and meta-analysis." Bioinformatics 28.4 (2012): 573-580.

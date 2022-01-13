@@ -5,6 +5,7 @@ Created on Tue Jul 21 16:31:17 2020
 @author: Yang Xu
 """
 
+import umap
 import scipy
 import anndata
 import collections
@@ -14,8 +15,8 @@ import cosg as cosg
 import scanpy as sc
 import multiprocessing
 
-import torch
-import torch.nn.functional as F
+#import torch
+#import torch.nn.functional as F
 
 import rpy2.robjects as ro
 import rpy2.robjects as robjects
@@ -26,10 +27,13 @@ from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.feature_extraction.text import TfidfTransformer
 
+from SCCAF import SCCAF_optimize_all
+
 import warnings
 warnings.filterwarnings("ignore")
 
 ##-----------------------------------------------------------------------------
+##main functions of transfer learning via parallel computing
 def ensemble_labels(multi_labels=None):
     ensemble = []
     for i in range(multi_labels.shape[0]):
@@ -41,36 +45,45 @@ def ensemble_labels(multi_labels=None):
         ensemble.append(ks[vs.index(max(vs))])
     return ensemble
 
-def BatchNorm(ad):
+#def BatchNorm(ad):
     ##use torch batchnorm1d layer to perform batch normalization
     ##not used in final method
-    X = ad.X.copy()
-    if scipy.sparse.issparse(X):
-        X = X.todense()
+#    X = ad.X.copy()
+#    if scipy.sparse.issparse(X):
+#        X = X.todense()
     
-    X_all_tensor = torch.tensor(X).float()
-    #batchnorm = torch.nn.BatchNorm1d(X.shape[1], affine=False)
-    batchnorm = torch.nn.LayerNorm(X.shape[1])
-    activation = torch.nn.LeakyReLU(0.2)
-    batchnorm.to(torch.device("cpu"))
-    activation.to(torch.device("cpu"))
+#    X_all_tensor = torch.tensor(X).float()
+#    batchnorm = torch.nn.BatchNorm1d(X.shape[1], affine=False)
+#    activation = torch.nn.LeakyReLU(0.2)
+#    batchnorm.to(torch.device("cpu"))
+#    activation.to(torch.device("cpu"))
 
-    newX = np.zeros((X.shape))
+#    newX = np.zeros((X.shape))
 
-    batches = list(set(ad.obs['study'].values.tolist()))
-    for b in batches:
-        pred = batchnorm(X_all_tensor[ad.obs['study']==b,:])
-        pred = activation(pred)
-        pred = F.normalize(pred,p=1,dim=1)
-        pred = torch.Tensor.cpu(pred).detach().numpy()
-        #scaler = StandardScaler()
-        #pred=scaler.fit_transform(X[ad.obs['study']==b,:])
-        newX[ad.obs['study']==b,:]=pred
-    ad.obsm['X_batch']=newX
-    return ad
+    #batches = list(set(ad.obs['study'].values.tolist()))
+    #for b in batches:
+    #    pred = batchnorm(X_all_tensor[ad.obs['study']==b,:])
+    #    pred = activation(pred)
+    #    #pred = F.normalize(pred,p=1,dim=1)
+    #    pred = torch.Tensor.cpu(pred).detach().numpy()
+    #    #scaler = StandardScaler()
+    #    #pred=scaler.fit_transform(X[ad.obs['study']==b,:])
+    #    newX[ad.obs['study']==b,:]=pred
 
-def gene2cell(ad=None, cell_markers=None,use_weight=False,
-              if_tfidf=True,if_thresh=True,use_knn=False):
+#    batch_size=1024
+#    for j in range(X.shape[0]//batch_size+1):
+#        pred = batchnorm(X_all_tensor[j*batch_size:(j+1)*batch_size,:])
+#        pred = activation(pred)
+#        pred = F.normalize(pred, dim=1,p=2)
+#        pred = torch.Tensor.cpu(pred).detach().numpy()
+#        newX[j*batch_size:(j+1)*batch_size,:]=pred
+    
+#    ad.obsm['X_batch']=newX
+
+#    return ad
+
+def gene2cell(ad=None, cell_markers=None,use_weight=False,thresh=0.25,
+              if_tfidf=True,if_thresh=True,use_knn=False,use_umap=True):
     ##TF-IDF transformation
     X = ad.X.copy()
     if scipy.sparse.issparse(X):
@@ -98,7 +111,7 @@ def gene2cell(ad=None, cell_markers=None,use_weight=False,
                 if i in ad.var.index:
                     if if_thresh:
                         expr95 = np.percentile(X[:,ad.var.index == i],95)
-                        thresh = 0.25 * expr95
+                        thresh = thresh * expr95
                         l = np.array(X[:,ad.var.index == i])
                         l[X[:,ad.var.index == i]<=thresh]=0
                     else:
@@ -121,7 +134,7 @@ def gene2cell(ad=None, cell_markers=None,use_weight=False,
             for i in v:
                 if i in ad.var.index:
                     expr95 = np.percentile(X[:,ad.var.index == i],95)
-                    thresh = 0.25 * expr95
+                    thresh = thresh * expr95
                     l = np.array(X[:,ad.var.index == i])
                     l[X[:,ad.var.index == i]<=thresh]=0
                     n[np.array(l>0).reshape(X.shape[0])] += 1
@@ -132,13 +145,20 @@ def gene2cell(ad=None, cell_markers=None,use_weight=False,
             exprsed[k] = n.reshape(X.shape[0])        
     
     if use_knn:##not used in final method
-        ad.obsm['X_score']=labels.values
+        if use_umap:
+            down_samp = pd.DataFrame(labels.values[ad.obs['source']=='reference',:])
+            umaps = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2,
+                              metric="cosine").fit(down_samp.values)
+            embedding = umaps.transform(labels.values)
+            ad.obsm['X_score']=embedding
+        else:
+            ad.obsm['X_score']=labels.values
         subsample = ad[ad.obs['source']=='reference']
         subsample = downsample_to_smallest_category(subsample, 'cell_type', min_cells=1000, 
                                                     keep_small_categories=True)#default 500
         neigh = KNeighborsClassifier(n_neighbors=5,weights='distance')
         neigh.fit(subsample.obsm['X_score'], subsample.obs['cell_type'])
-        new_labels = neigh.predict_proba(labels.values)
+        new_labels = neigh.predict_proba(ad.obsm['X_score'])
         new_labels = pd.DataFrame(new_labels)
         new_labels.columns = neigh.classes_
         
@@ -181,8 +201,6 @@ def multiMASI(labels=None,new_labels=None):
     ad.obsm['Score']=labels.values
     
     ##two key parameters for louvain clustering
-    #res = [3,5,7]
-    #n_neis = [5,10,15]
     res = [3,5,7]
     n_neis = [5,10,15]
     
@@ -192,8 +210,8 @@ def multiMASI(labels=None,new_labels=None):
         for nei in n_neis:
             
             sc.pp.neighbors(ad, use_rep="Score", n_neighbors=nei,metric='cosine')
-            #sc.tl.louvain(ad, resolution=r, key_added = 'louvain')
-            sc.tl.leiden(ad, resolution=r, key_added = 'louvain')
+            sc.tl.louvain(ad, resolution=r, key_added = 'louvain')
+            #sc.tl.leiden(ad, resolution=r, key_added = 'louvain')
             
             cm = confusion_matrix(ad.obs['louvain'].values.astype(int),
                                   labels1)
@@ -284,7 +302,7 @@ def parallel(scores=None,labels=None,batch_size=20000,n_core=10):
     return annotations
 
 ##-----------------------------------------------------------------------------
-##marker identification
+##robust marker identification
 def downsample_to_smallest_category(adata,column="cell_type",random_state=None,
                                     min_cells=15,keep_small_categories=False):
     
@@ -398,7 +416,8 @@ def marker_identification(source_data=None,num_sub_cells=500,if_metacells=False)
         #repeats = ['MAST','bimod','roc','t-test_overestim_var','wilcoxon-tie','cosg']
         repeats = ['poisson','bimod','roc','cosg','t-test_overestim_var','wilcoxon-tie']
     else:
-        repeats = ['poisson','cosg','bimod']
+        #repeats = ['poisson','cosg','bimod']
+        repeats = ['poisson','bimod','roc','MAST','wilcox','cosg','t-test_overestim_var','wilcoxon-tie']#
     #repeats = ['poisson','cosg','bimod']##option 1
     #repeats = ['cosg','t-test_overestim_var','bimod','poisson']##option 2 and it works best so far
     #repeats = ['cosg','t-test_overestim_var','bimod','poisson','wilcox','negbinom','MAST']##option 3
@@ -634,3 +653,34 @@ def metacells(source_data=None,res=10):
     metacells = anndata.AnnData(X=x,obs=meta)
     
     return metacells
+
+##-----------------------------------------------------------------------------
+##Use SCCAF to identify subtypes, when reference data has less annotation 
+##resolution than target data (Miao et al., Nature Methods, 2020)
+def subtype_identification(ad=None,cell_type_score=None):
+    
+    ad.obsm['X_pca']=cell_type_score.values
+    sc.pp.neighbors(ad, use_rep="X_pca", n_neighbors=5,metric='cosine')
+    
+    all_anns = list(set(ad.obs['Annotation'].values.tolist()))
+    ad.obs['newAnnotation']=" "
+    newAnnotation = np.array(ad.obs['newAnnotation'])
+    for a in all_anns:
+        ad_sccaf = ad[ad.obs['Annotation']==a]
+        sc.tl.leiden(ad_sccaf, resolution=0.2, key_added='L2_Round0')
+        SCCAF_optimize_all(min_acc=0.9, ad=ad_sccaf, basis ='umap', use='pca',
+                           prefix = 'L2')
+        subcluster = np.array(ad_sccaf.obs['L2_result'].values.tolist())
+        subid = pd.DataFrame.from_dict(collections.Counter(ad_sccaf.obs['L2_result'].values.tolist()),
+                                       orient='index')
+        subid = subid[subid[0]<=15]
+        for i in subid.index.tolist():
+            subcluster[subcluster==i]=0
+        newAnnotation[ad.obs['Annotation']==a]=subcluster#ad_sccaf.obs['L2_result'].values.tolist()
+        
+    subtypes = []
+    for i in range(len(newAnnotation)):
+        subtypes.append(ad.obs['Annotation'].values[i]+"-"+newAnnotation[i])
+    ad.obs['newAnnotation']=subtypes
+    
+    return ad

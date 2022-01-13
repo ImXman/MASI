@@ -17,6 +17,7 @@ MASI utilizes robust marker idenfication to identify marker genes from reference
     
 ### Usage
     ##step 1 transform gene expression matrix to cell-type score matrix
+    ##scores can further be used for visualization and other downstream analyses
     scores, labels = masi.gene2cell(ad=ad,cell_markers=cell_markers,use_weight=True)
     ##step 2 clustering and parallel annotation
     annotation= masi.parallel(scores=scores,labels=labels,batch_size=50000)

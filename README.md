@@ -11,6 +11,7 @@ MASI utilizes robust marker idenfication to identify marker genes from reference
 
 ### Install requirement packages
     pip install scanpy cosg rpy2 sccaf
+    pip install fa2##install if doing integrative lineage analysis
     
     ##install Seurat separately in R
     install.packages('Seurat')

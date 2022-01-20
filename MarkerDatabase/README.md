@@ -7,6 +7,8 @@
 | **Mouse embryo brain** | mouse_embryo_brain_bandler_markers.csv | 11 major cell types in mouse embryo brain | Bandler et al., Nature 2021
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markers_author.csv | 72 refined subtypes in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
 
+  **Note 1** : marker collections in the 1st table have been verified by authors in their publications
+
 ## Collections through auto marker identification
 
 | Marker reference | Filename | Description | Publication
@@ -23,4 +25,4 @@
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markersr_tissue.csv | 8 major lineages in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markersr.csv | 30 major cell types in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
 
-   **Note** : marker collections in the 2nd table is and should be only used for MASI but not other marker-based annotation methods.
+   **Note 2** : marker collections in the 2nd table is and should be only used for MASI but not other marker-based annotation methods.

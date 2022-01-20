@@ -25,4 +25,4 @@
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markersr_tissue.csv | 8 major lineages in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markersr.csv | 30 major cell types in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
 
-   **Note 2** : marker collections in the 2nd table is and should be only used for MASI but not other marker-based annotation methods.
+   **Note 2** : marker collections in the 2nd table were identified to be favorable for annotation through MASI.

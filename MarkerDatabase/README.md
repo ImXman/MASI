@@ -6,7 +6,7 @@
 | **Human lung cell atlas** | 41586_2020_2922_MOESM6_ESM.xlsx | human lung | Travaglini et al., Nature 2020
 | **Mouse embryo brain** | mouse_embryo_brain_bandler_markers.csv | 11 major cell types in mouse embryo brain | Bandler et al., Nature 2021
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markers_author.csv | 72 refined subtypes in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
-| **Zebrafish embryo** | encyclopedia_table.xlsx | immune cell types across human tissues  | Conde et al., bioRxiv 2021
+| **Cross-tissue immune cell atlas** | encyclopedia_table.xlsx | immune cell types across human tissues  | Conde et al., bioRxiv 2021
 
   **Note 1** : marker collections in the 1st table have been verified by authors in their publications
 

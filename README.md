@@ -32,5 +32,5 @@ Please see tutorials at https://github.com/ImXman/MASI/tree/main/tutorial
 
 ### 5. References
     1. Xu, Y., et al. "MACA: Marker-based automatic cell-type annotation for single cell expression data." Bioinformatics (2021).
-    3. Wolf, F. Alexander, Philipp Angerer, and Fabian J. Theis. "SCANPY: large-scale single-cell gene expression data analysis." Genome biology (2018).
-    4. Butler, Andrew, et al. "Integrating single-cell transcriptomic data across different conditions, technologies, and species." Nature biotechnology (2018).
+    2. Wolf, F. Alexander, Philipp Angerer, and Fabian J. Theis. "SCANPY: large-scale single-cell gene expression data analysis." Genome biology (2018).
+    3. Butler, Andrew, et al. "Integrating single-cell transcriptomic data across different conditions, technologies, and species." Nature biotechnology (2018).

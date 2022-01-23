@@ -28,7 +28,6 @@ MASI utilizes robust marker idenfication to identify marker genes from reference
 
 ### 4. Reproduce results in manuscript
 Please see tutorials at https://github.com/ImXman/MASI/tree/main/tutorial
-
 Processed data can be found at https://figshare.com/articles/dataset/Fast_model-free_integration_and_transfer_learning_via_MASI_for_single-cell_expression_data/18866264.
     
 

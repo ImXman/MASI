@@ -17,6 +17,10 @@ MASI utilizes robust marker idenfication to identify marker genes from reference
     install.packages('Seurat')
     install.packages('RobustRankAggreg')
     
+    ##Installment of PyTorch (Optional)
+    ##We noticed adding BatchNorm1D as data transformation can further remove batch effects 
+    ##but may sacrifice discriminative power for cell-type identification.
+    
 ### 3. Usage
     import MASI as masi
     ##step 1 transform gene expression matrix to cell-type score matrix

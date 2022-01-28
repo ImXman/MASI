@@ -40,3 +40,6 @@ Processed data can be found at https://figshare.com/articles/dataset/Fast_model-
     1. Xu, Y., et al. "MACA: Marker-based automatic cell-type annotation for single cell expression data." Bioinformatics (2021).
     2. Wolf, F. Alexander, Philipp Angerer, and Fabian J. Theis. "SCANPY: large-scale single-cell gene expression data analysis." Genome biology (2018).
     3. Butler, Andrew, et al. "Integrating single-cell transcriptomic data across different conditions, technologies, and species." Nature biotechnology (2018).
+
+### 6. Citation
+Xu et al. "MACA: marker-based automatic cell-type annotation for single-cell expression data". <a href="https://academic.oup.com/bioinformatics/advance-article-abstract/doi/10.1093/bioinformatics/btab840/6478268?redirectedFrom=fulltext">Bioinformatics</a>

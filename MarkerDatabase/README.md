@@ -7,7 +7,7 @@
 | **Mouse embryo brain** | mouse_embryo_brain_bandler_markers.csv | 11 major cell types in mouse embryo brain | Bandler et al., Nature 2021
 | **Zebrafish embryo** | zebrafish_embryo_24hpf_wagner_markers_author.csv | 72 refined subtypes in zebrafish embryo at 24hpf  | Wagner et al., Science 2018
 | **Cross-tissue immune cell atlas** | encyclopedia_table.xlsx | immune cell types across human tissues  | Conde et al., bioRxiv 2021
-| **ScTypeDB** | ScTypeDB_full.xlsx | ScTypeDB, a combined PanglaoDB and CellMarker database  | Conde et al., Nature Communications 2022
+| **ScTypeDB** | ScTypeDB_full.xlsx | ScTypeDB, a combined PanglaoDB and CellMarker database  | Ianevski et al., Nature Communications 2022
 
   **Note 1** : marker collections in the 1st table were collected from publications
 

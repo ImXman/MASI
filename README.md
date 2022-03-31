@@ -2,7 +2,7 @@
 
 MASI: marker-assisted standardization and integration for single-cell transcriptomics data
 
-Manuscript: Fast model-free standardization and integration via MASI for single-cell transcriptomics data (in prep)
+Manuscript: Fast model-free standardization and integration of single-cell transcriptomics data
 
 ### 1. Brief description
 MASI utilizes robust marker idenfication to identify marker genes from reference data and transfers cell-type labels to target data through MACA.
@@ -47,4 +47,4 @@ Processed data can be found at https://figshare.com/articles/dataset/Fast_model-
     3. Butler, Andrew, et al. "Integrating single-cell transcriptomic data across different conditions, technologies, and species." Nature biotechnology (2018).
 
 ### 6. Citation
-Xu et al. "MACA: marker-based automatic cell-type annotation for single-cell expression data". <a href="https://academic.oup.com/bioinformatics/advance-article-abstract/doi/10.1093/bioinformatics/btab840/6478268?redirectedFrom=fulltext">Bioinformatics</a>
+Xu et al. "Fast model-free standardization and integration of single-cell transcriptomics data". <a href="https://www.biorxiv.org/content/10.1101/2022.03.28.486110v1">bioRxiv</a>

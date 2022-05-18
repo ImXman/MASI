@@ -50,4 +50,4 @@ Processed data can be found at https://figshare.com/articles/dataset/Fast_model-
 Xu et al. "Fast model-free standardization and integration of single-cell transcriptomics data". <a href="https://www.biorxiv.org/content/10.1101/2022.03.28.486110v1">bioRxiv</a>
 
 ## update 05/18/2022
-We are working a major update of MASI to integrate single-cell multi-omics data
+We are working on a major update of MASI to integrate single-cell multi-omics data
